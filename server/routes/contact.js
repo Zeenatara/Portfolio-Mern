@@ -1,15 +1,14 @@
 import { Router } from 'express';
 import nodemailer from 'nodemailer';
-import Message from '../models/Message.js';
 
 const router = Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-
 let transporter = null;
+
 function getTransporter() {
-  if (!transporter) { 
+  if (!transporter) {
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -18,6 +17,7 @@ function getTransporter() {
       },
     });
   }
+
   return transporter;
 }
 
@@ -35,7 +35,6 @@ async function sendNotificationEmail({ name, email, message }) {
   });
 }
 
-// POST /api/contact — save a message and email it to Zeenat
 router.post('/', async (req, res) => {
   try {
     const { name, email, message } = req.body || {};
@@ -45,40 +44,30 @@ router.post('/', async (req, res) => {
         .status(400)
         .json({ error: 'Name, email, and message are all required.' });
     }
+
     if (!EMAIL_RE.test(email)) {
       return res
         .status(400)
         .json({ error: 'Please provide a valid email address.' });
     }
 
-    const saved = await Message.create({ name, email, message });
-
-    // Don't let an email hiccup block the response — log it and move on.
     try {
       await sendNotificationEmail({ name, email, message });
     } catch (emailErr) {
       console.error('Email notification failed:', emailErr.message);
+
+      return res.status(500).json({
+        error: 'Unable to send your message right now. Please try again later.',
+      });
     }
 
-    return res.status(201).json({ ok: true, id: saved._id });
+    return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error('Error saving contact message:', err.message);
-    return res
-      .status(500)
-      .json({ error: 'Server error — please try again later.' });
-  }
-});
+    console.error('Contact form error:', err.message);
 
-// GET /api/contact — list saved messages (useful for you to check submissions)
-router.get('/', async (req, res) => {
-  try {
-    const messages = await Message.find().sort({ createdAt: -1 }).limit(100);
-    return res.json(messages);
-  } catch (err) {
-    console.error('Error fetching messages:', err.message);
-    return res
-      .status(500)
-      .json({ error: 'Server error — please try again later.' });
+    return res.status(500).json({
+      error: 'Server error — please try again later.',
+    });
   }
 });
 
